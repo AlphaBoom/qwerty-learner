@@ -1,17 +1,22 @@
 import type { WordUpdateAction } from '../InputHandler'
 import InputHandler from '../InputHandler'
-import WordSound from '../WordSound'
 import Furigana from './Furigana'
 import Letter from './Letter'
-import type { LetterState } from './Letter'
 import Notation from './Notation'
+import { TipAlert } from './TipAlert'
 import { CheckInputResult, DefaultWordStateAdapter, FuriganaWordStateAdapter } from './adapters'
 import style from './index.module.css'
+import { initialWordState } from './type'
+import type { WordState } from './type'
+import Tooltip from '@/components/Tooltip'
+import type { WordPronunciationIconRef } from '@/components/WordPronunciationIcon'
+import { WordPronunciationIcon } from '@/components/WordPronunciationIcon'
 import { EXPLICIT_SPACE } from '@/constants'
 import useKeySounds from '@/hooks/useKeySounds'
 import useNotationInfo from '@/pages/Typing/hooks/useNotationInfo'
 import { TypingContext, TypingStateActionType } from '@/pages/Typing/store'
 import {
+  currentChapterAtom,
   currentDictInfoAtom,
   isIgnoreCaseAtom,
   isShowAnswerOnHoverAtom,
@@ -20,50 +25,12 @@ import {
   wordDictationConfigAtom,
 } from '@/store'
 import type { Word } from '@/typings'
-import { getUtcStringForMixpanel, useMixPanelWordLogUploader } from '@/utils'
+import { CTRL, getUtcStringForMixpanel, useMixPanelWordLogUploader } from '@/utils'
 import { useSaveWordRecord } from '@/utils/db'
-import type { LetterMistakes } from '@/utils/db/record'
 import { useAtomValue } from 'jotai'
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useHotkeys } from 'react-hotkeys-hook'
 import { useImmer } from 'use-immer'
-
-export type WordState = {
-  displayWord: string
-  inputWord: string
-  letterStates: LetterState[]
-  isFinished: boolean
-  // 是否出现输入错误
-  hasWrong: boolean
-  // 记录是否已经出现过输入错误
-  hasMadeInputWrong: boolean
-  // 用户输入错误的次数
-  wrongCount: number
-  startTime: string
-  endTime: string
-  inputCount: number
-  correctCount: number
-  letterTimeArray: number[]
-  letterMistake: LetterMistakes
-  // 用于随机隐藏字母功能
-  randomLetterVisible: boolean[]
-}
-
-const initialWordState: WordState = {
-  displayWord: '',
-  inputWord: '',
-  letterStates: [],
-  isFinished: false,
-  hasWrong: false,
-  hasMadeInputWrong: false,
-  wrongCount: 0,
-  startTime: '',
-  endTime: '',
-  inputCount: 0,
-  correctCount: 0,
-  letterTimeArray: [],
-  letterMistake: {},
-  randomLetterVisible: [],
-}
 
 const vowelLetters = ['A', 'E', 'I', 'O', 'U']
 
@@ -86,7 +53,14 @@ export default function WordComponent({ word, onFinish }: { word: Word; onFinish
   const notationInfo = useNotationInfo(isRomaji ? word.notation : null)
   const showNotation = !wordDictationConfig.isOpen && notationInfo
   const showFurigana = wordDictationConfig.isOpen && notationInfo
-  const adapter = useMemo(() => (showFurigana ? new FuriganaWordStateAdapter(notationInfo) : new DefaultWordStateAdapter()), [showFurigana])
+  const adapter = useMemo(
+    () => (showFurigana ? new FuriganaWordStateAdapter(notationInfo) : new DefaultWordStateAdapter()),
+    [showFurigana, notationInfo],
+  )
+  const currentLanguageCategory = useAtomValue(currentDictInfoAtom).languageCategory
+  const currentChapter = useAtomValue(currentChapterAtom)
+  const [showTipAlert, setShowTipAlert] = useState(false)
+  const wordPronunciationIconRef = useRef<WordPronunciationIconRef>(null)
 
   useEffect(() => {
     // run only when word changes
@@ -97,7 +71,7 @@ export default function WordComponent({ word, onFinish }: { word: Word; onFinish
     newWordState.startTime = getUtcStringForMixpanel()
     newWordState.randomLetterVisible = displayWord.split('').map(() => Math.random() > 0.4)
     setWordState(newWordState)
-  }, [word, setWordState, wordDictationConfig.isOpen])
+  }, [word, setWordState, wordDictationConfig.isOpen, adapter])
 
   const updateInput = useCallback(
     (updateAction: WordUpdateAction) => {
@@ -127,6 +101,40 @@ export default function WordComponent({ word, onFinish }: { word: Word; onFinish
   const handleHoverWord = useCallback((checked: boolean) => {
     setIsHoveringWord(checked)
   }, [])
+
+  useHotkeys(
+    'tab',
+    () => {
+      handleHoverWord(true)
+    },
+    { enableOnFormTags: true, preventDefault: true },
+    [],
+  )
+
+  useHotkeys(
+    'tab',
+    () => {
+      handleHoverWord(false)
+    },
+    { enableOnFormTags: true, keyup: true, preventDefault: true },
+    [],
+  )
+  useHotkeys(
+    'ctrl+j',
+    () => {
+      if (state.isTyping) {
+        wordPronunciationIconRef.current?.play()
+      }
+    },
+    [state.isTyping],
+    { enableOnFormTags: true, preventDefault: true },
+  )
+
+  useEffect(() => {
+    if (wordState.inputWord.length === 0 && state.isTyping) {
+      wordPronunciationIconRef.current?.play && wordPronunciationIconRef.current?.play()
+    }
+  }, [state.isTyping, wordState.inputWord.length, wordPronunciationIconRef.current?.play])
 
   const getLetterVisible = useCallback(
     (index: number) => {
@@ -164,6 +172,7 @@ export default function WordComponent({ word, onFinish }: { word: Word; onFinish
     if (result == CheckInputResult.Noop) {
       return
     }
+
     switch (result) {
       case CheckInputResult.Correct:
       case CheckInputResult.Complete:
@@ -186,7 +195,7 @@ export default function WordComponent({ word, onFinish }: { word: Word; onFinish
           })
           playKeySound()
         }
-        dispatch({ type: TypingStateActionType.INCREASE_CORRECT_COUNT })
+        dispatch({ type: TypingStateActionType.REPORT_CORRECT_WORD })
         break
       case CheckInputResult.Incorrect:
         playBeepSound()
@@ -197,15 +206,22 @@ export default function WordComponent({ word, onFinish }: { word: Word; onFinish
           state.hasMadeInputWrong = true
           state.wrongCount += 1
           state.letterTimeArray = []
-          if (state.letterMistake[letterIndex]) {
-            state.letterMistake[letterIndex].push(state.inputWord.at(-1)!)
-          } else {
-            state.letterMistake[letterIndex] = [state.inputWord.at(-1)!]
+          if (state.inputWord) {
+            if (state.letterMistake[letterIndex]) {
+              state.letterMistake[letterIndex].push(state.inputWord[state.inputWord.length - 1])
+            } else {
+              state.letterMistake[letterIndex] = [state.inputWord[state.inputWord.length - 1]]
+            }
           }
         })
 
-        dispatch({ type: TypingStateActionType.INCREASE_WRONG_COUNT })
-        dispatch({ type: TypingStateActionType.REPORT_WRONG_WORD })
+        {
+          const currentState = JSON.parse(JSON.stringify(state))
+          dispatch({ type: TypingStateActionType.REPORT_WRONG_WORD, payload: { letterMistake: currentState.letterMistake } })
+          if (currentChapter === 0 && state.chapterData.index === 0 && wordState.wrongCount >= 3) {
+            setShowTipAlert(true)
+          }
+        }
         break
       case CheckInputResult.Hold:
         playKeySound()
@@ -232,10 +248,6 @@ export default function WordComponent({ word, onFinish }: { word: Word; onFinish
 
   useEffect(() => {
     if (wordState.isFinished) {
-      if (!wordState.hasMadeInputWrong) {
-        dispatch({ type: TypingStateActionType.REPORT_CORRECT_WORD })
-      }
-
       dispatch({ type: TypingStateActionType.SET_IS_SAVING_RECORD, payload: true })
 
       wordLogUploader({
@@ -266,9 +278,17 @@ export default function WordComponent({ word, onFinish }: { word: Word; onFinish
   return (
     <>
       <InputHandler updateInput={updateInput} />
-      <div className="flex flex-col justify-center pb-1 pt-4">
+      <div
+        lang={currentLanguageCategory !== 'code' ? currentLanguageCategory : 'en'}
+        className="flex flex-col items-center justify-center pb-1 pt-4"
+      >
         {showNotation && <Notation key={word.notation} infos={notationInfo} />}
-        <div className="relative">
+        <div
+          className={`tooltip-info relative w-fit bg-transparent p-0 leading-normal shadow-none dark:bg-transparent ${
+            wordDictationConfig.isOpen ? 'tooltip' : ''
+          }`}
+          data-tip="按 Tab 快捷键显示完整单词"
+        >
           <div
             onMouseEnter={() => handleHoverWord(true)}
             onMouseLeave={() => handleHoverWord(false)}
@@ -282,9 +302,16 @@ export default function WordComponent({ word, onFinish }: { word: Word; onFinish
               })
             )}
           </div>
-          {pronunciationIsOpen && <WordSound word={word.name} inputWord={wordState.inputWord} className="h-10 w-10" />}
+          {pronunciationIsOpen && (
+            <div className="absolute -right-12 top-1/2 h-9 w-9 -translate-y-1/2 transform ">
+              <Tooltip content={`快捷键${CTRL} + J`}>
+                <WordPronunciationIcon word={word.name} ref={wordPronunciationIconRef} className="h-full w-full" />
+              </Tooltip>
+            </div>
+          )}
         </div>
       </div>
+      <TipAlert className="fixed bottom-10 right-3" show={showTipAlert} setShow={setShowTipAlert} />
     </>
   )
 }

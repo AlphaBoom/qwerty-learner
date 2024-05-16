@@ -14,7 +14,7 @@ export default function useNotationInfo(notation: string | null | undefined, typ
       return []
     }
     const re = /(.+?)[([](.+?)[)\]]/g
-    let match: any
+    let match: RegExpExecArray | null
     let start = 0
     const ret = []
     while ((match = re.exec(notation))) {
@@ -51,5 +51,5 @@ export default function useNotationInfo(notation: string | null | undefined, typ
       })
     }
     return ret
-  }, [notation])
+  }, [notation, type])
 }

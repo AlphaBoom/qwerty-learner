@@ -19,6 +19,21 @@ const bannedKeys = [
   'Hyper',
   'Super',
   'OS',
+  // Up, down, left and right keys
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  // volume keys
+  'AudioVolumeUp',
+  'AudioVolumeDown',
+  'AudioVolumeMute',
+  // special keys
+  'End',
+  'PageDown',
+  'PageUp',
+  'Clear',
+  'Home',
 ]
 
 export const isLegal = (key: string): boolean => {
@@ -44,6 +59,10 @@ export const IsDesktop = () => {
   }
   return flag
 }
+
+export const IS_MAC_OS = navigator.userAgent.indexOf('Macintosh') !== -1
+
+export const CTRL = IS_MAC_OS ? 'Control' : 'Ctrl'
 
 export function addHowlListener(howl: Howl, ...args: Parameters<Howl['on']>) {
   howl.on(...args)
@@ -98,4 +117,13 @@ export function getUTCUnixTimestamp() {
       now.getUTCMilliseconds(),
     ) / 1000,
   )
+}
+
+export function timeStamp2String(timestamp: number) {
+  const date = new Date(timestamp * 1000)
+
+  const dateString = date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
+  const timeString = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
+
+  return `${dateString} ${timeString}`
 }

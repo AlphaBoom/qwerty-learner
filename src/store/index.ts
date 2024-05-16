@@ -1,5 +1,6 @@
 import atomForConfig from './atomForConfig'
-import { DISMISS_START_CARD_DATE_KEY } from '@/constants'
+import { reviewInfoAtom } from './reviewInfoAtom'
+import { DISMISS_START_CARD_DATE_KEY, defaultFontSizeConfig } from '@/constants'
 import { idDictionaryMap } from '@/resources/dictionary'
 import { correctSoundResources, keySoundResources, wrongSoundResources } from '@/resources/soundResource'
 import type {
@@ -11,6 +12,7 @@ import type {
   WordDictationOpenBy,
   WordDictationType,
 } from '@/typings'
+import type { ReviewRecord } from '@/utils/db/record'
 import { atom } from 'jotai'
 import { atomWithStorage } from 'jotai/utils'
 
@@ -57,6 +59,9 @@ export const pronunciationConfigAtom = atomForConfig('pronunciation', {
   transVolume: 1,
   rate: 1,
 })
+
+export const fontSizeConfigAtom = atomForConfig('fontsize', defaultFontSizeConfig)
+
 export const pronunciationIsOpenAtom = atom((get) => get(pronunciationConfigAtom).isOpen)
 
 export const pronunciationIsTransReadAtom = atom((get) => get(pronunciationConfigAtom).isTransRead)
@@ -72,6 +77,12 @@ export const isIgnoreCaseAtom = atomWithStorage('isIgnoreCase', true)
 export const isShowAnswerOnHoverAtom = atomWithStorage('isShowAnswerOnHover', true)
 
 export const isTextSelectableAtom = atomWithStorage('isTextSelectable', false)
+
+export const reviewModeInfoAtom = reviewInfoAtom({
+  isReviewMode: false,
+  reviewRecord: undefined as ReviewRecord | undefined,
+})
+export const isReviewModeAtom = atom((get) => get(reviewModeInfoAtom).isReviewMode)
 
 export const phoneticConfigAtom = atomForConfig('phoneticConfig', {
   isOpen: true,
@@ -92,7 +103,7 @@ export const infoPanelStateAtom = atom<InfoPanelState>({
 })
 
 export const wordDictationConfigAtom = atomForConfig('wordDictationConfig', {
-  isOpen: true,
+  isOpen: false,
   type: 'hideAll' as WordDictationType,
   openBy: 'auto' as WordDictationOpenBy,
 })

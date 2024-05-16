@@ -1,14 +1,16 @@
 import { TypingContext, TypingStateActionType } from '../../store'
+import type { TypingState } from '../../store/type'
 import PrevAndNextWord from '../PrevAndNextWord'
 import Progress from '../Progress'
 import Phonetic from './components/Phonetic'
 import Translation from './components/Translation'
 import WordComponent from './components/Word'
 import { usePrefetchPronunciationSound } from '@/hooks/usePronunciation'
-import { isShowPrevAndNextWordAtom, loopWordConfigAtom, phoneticConfigAtom } from '@/store'
+import { isReviewModeAtom, isShowPrevAndNextWordAtom, loopWordConfigAtom, phoneticConfigAtom, reviewModeInfoAtom } from '@/store'
 import type { Word } from '@/typings'
-import { useAtomValue } from 'jotai'
-import { useCallback, useContext, useState } from 'react'
+import { useAtomValue, useSetAtom } from 'jotai'
+import { useCallback, useContext, useMemo, useState } from 'react'
+import { useHotkeys } from 'react-hotkeys-hook'
 
 export default function WordPanel() {
   // eslint-disable-next-line  @typescript-eslint/no-non-null-assertion
@@ -21,11 +23,33 @@ export default function WordPanel() {
   const currentWord = state.chapterData.words[state.chapterData.index]
   const nextWord = state.chapterData.words[state.chapterData.index + 1] as Word | undefined
 
+  const setReviewModeInfo = useSetAtom(reviewModeInfoAtom)
+  const isReviewMode = useAtomValue(isReviewModeAtom)
+
+  const prevIndex = useMemo(() => {
+    const newIndex = state.chapterData.index - 1
+    return newIndex < 0 ? 0 : newIndex
+  }, [state.chapterData.index])
+  const nextIndex = useMemo(() => {
+    const newIndex = state.chapterData.index + 1
+    return newIndex > state.chapterData.words.length - 1 ? state.chapterData.words.length - 1 : newIndex
+  }, [state.chapterData.index, state.chapterData.words.length])
+
   usePrefetchPronunciationSound(nextWord?.name)
 
   const reloadCurrentWordComponent = useCallback(() => {
     setWordComponentKey((old) => old + 1)
   }, [])
+
+  const updateReviewRecord = useCallback(
+    (state: TypingState) => {
+      setReviewModeInfo((old) => ({
+        ...old,
+        reviewRecord: old.reviewRecord ? { ...old.reviewRecord, index: state.chapterData.index } : undefined,
+      }))
+    },
+    [setReviewModeInfo],
+  )
 
   const onFinish = useCallback(() => {
     if (state.chapterData.index < state.chapterData.words.length - 1 || currentWordExerciseCount < loopWordTimes - 1) {
@@ -36,11 +60,23 @@ export default function WordPanel() {
         reloadCurrentWordComponent()
       } else {
         setCurrentWordExerciseCount(0)
-        dispatch({ type: TypingStateActionType.NEXT_WORD })
+        if (isReviewMode) {
+          dispatch({
+            type: TypingStateActionType.NEXT_WORD,
+            payload: {
+              updateReviewRecord,
+            },
+          })
+        } else {
+          dispatch({ type: TypingStateActionType.NEXT_WORD })
+        }
       }
     } else {
       // 用户完成当前章节
       dispatch({ type: TypingStateActionType.FINISH_CHAPTER })
+      if (isReviewMode) {
+        setReviewModeInfo((old) => ({ ...old, reviewRecord: old.reviewRecord ? { ...old.reviewRecord, isFinished: true } : undefined }))
+      }
     }
   }, [
     state.chapterData.index,
@@ -49,7 +85,68 @@ export default function WordPanel() {
     loopWordTimes,
     dispatch,
     reloadCurrentWordComponent,
+    isReviewMode,
+    updateReviewRecord,
+    setReviewModeInfo,
   ])
+
+  const onSkipWord = useCallback(
+    (type: 'prev' | 'next') => {
+      if (type === 'prev') {
+        dispatch({ type: TypingStateActionType.SKIP_2_WORD_INDEX, newIndex: prevIndex })
+      }
+
+      if (type === 'next') {
+        dispatch({ type: TypingStateActionType.SKIP_2_WORD_INDEX, newIndex: nextIndex })
+      }
+    },
+    [dispatch, prevIndex, nextIndex],
+  )
+
+  useHotkeys(
+    'Ctrl + Shift + ArrowLeft',
+    (e) => {
+      e.preventDefault()
+      onSkipWord('prev')
+    },
+    { preventDefault: true },
+  )
+
+  useHotkeys(
+    'Ctrl + Shift + ArrowRight',
+    (e) => {
+      e.preventDefault()
+      onSkipWord('next')
+    },
+    { preventDefault: true },
+  )
+  const [isShowTranslation, setIsHoveringTranslation] = useState(false)
+
+  const handleShowTranslation = useCallback((checked: boolean) => {
+    setIsHoveringTranslation(checked)
+  }, [])
+
+  useHotkeys(
+    'tab',
+    () => {
+      handleShowTranslation(true)
+    },
+    { enableOnFormTags: true, preventDefault: true },
+    [],
+  )
+
+  useHotkeys(
+    'tab',
+    () => {
+      handleShowTranslation(false)
+    },
+    { enableOnFormTags: true, keyup: true, preventDefault: true },
+    [],
+  )
+
+  const shouldShowTranslation = useMemo(() => {
+    return isShowTranslation || state.isTransVisible
+  }, [isShowTranslation, state.isTransVisible])
 
   return (
     <div className="container flex h-full w-full flex-col items-center justify-center">
@@ -76,7 +173,12 @@ export default function WordPanel() {
             <div className="relative">
               <WordComponent word={currentWord} onFinish={onFinish} key={wordComponentKey} />
               {phoneticConfig.isOpen && <Phonetic word={currentWord} />}
-              {state.isTransVisible && <Translation trans={currentWord.trans.join('；')} />}
+              <Translation
+                trans={currentWord.trans.join('；')}
+                showTrans={shouldShowTranslation}
+                onMouseEnter={() => handleShowTranslation(true)}
+                onMouseLeave={() => handleShowTranslation(false)}
+              />
             </div>
           </div>
         )}

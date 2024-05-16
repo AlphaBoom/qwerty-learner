@@ -1,9 +1,9 @@
 import { isTextSelectableAtom, phoneticConfigAtom } from '@/store'
-import type { WordWithIndex } from '@/typings'
+import type { Word, WordWithIndex } from '@/typings'
 import { useAtomValue } from 'jotai'
 
 export type PhoneticProps = {
-  word: WordWithIndex
+  word: WordWithIndex | Word
 }
 
 function Phonetic({ word }: PhoneticProps) {
@@ -12,7 +12,7 @@ function Phonetic({ word }: PhoneticProps) {
 
   return (
     <div
-      className={`space-x-5 pt-1 text-center text-sm font-normal text-gray-600 transition-colors duration-300 dark:text-gray-400 ${
+      className={`space-x-5 text-center text-sm font-normal text-gray-600 transition-colors duration-300 dark:text-gray-400 ${
         isTextSelectable && 'select-text'
       }`}
     >

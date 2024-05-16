@@ -1,4 +1,4 @@
-import type { WordState } from '.'
+import type { WordState } from './type'
 import { EXPLICIT_SPACE } from '@/constants'
 import type { NotationInfo } from '@/pages/Typing/hooks/useNotationInfo'
 import type { Word } from '@/typings'
@@ -81,6 +81,7 @@ export class FuriganaWordStateAdapter implements WordStateAdapter {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   checkInput(wordState: WordState, _isIgnoreCase = false): [CheckInputResult, number] {
     const inputWord = wordState.inputWord
     const inputLength = inputWord.length
@@ -143,6 +144,7 @@ export class FuriganaWordStateAdapter implements WordStateAdapter {
     return [CheckInputResult.Correct, kanaIndex - 1]
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getDisplayWord(_word: Word): string {
     return this.kana
   }

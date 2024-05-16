@@ -1,12 +1,13 @@
 import { CHAPTER_LENGTH } from '@/constants'
-import { currentChapterAtom, currentDictInfoAtom } from '@/store'
+import { currentChapterAtom, currentDictInfoAtom, reviewModeInfoAtom } from '@/store'
 import type { Word, WordWithIndex } from '@/typings/index'
+import { wordListFetcher } from '@/utils/wordListFetcher'
 import { useAtom, useAtomValue } from 'jotai'
 import { useMemo } from 'react'
 import useSWR from 'swr'
 
 export type UseWordListResult = {
-  words: WordWithIndex[] | undefined
+  words: WordWithIndex[]
   isLoading: boolean
   error: Error | undefined
 }
@@ -17,36 +18,47 @@ export type UseWordListResult = {
 export function useWordList(): UseWordListResult {
   const currentDictInfo = useAtomValue(currentDictInfoAtom)
   const [currentChapter, setCurrentChapter] = useAtom(currentChapterAtom)
-
-  const isFirstChapter = currentDictInfo.id === 'cet4' && currentChapter === 0
+  const { isReviewMode, reviewRecord } = useAtomValue(reviewModeInfoAtom)
 
   // Reset current chapter to 0, when currentChapter is greater than chapterCount.
   if (currentChapter >= currentDictInfo.chapterCount) {
     setCurrentChapter(0)
   }
 
+  const isFirstChapter = !isReviewMode && currentDictInfo.id === 'cet4' && currentChapter === 0
   const { data: wordList, error, isLoading } = useSWR(currentDictInfo.url, wordListFetcher)
 
   const words: WordWithIndex[] = useMemo(() => {
-    const newWords = isFirstChapter
-      ? firstChapter
-      : wordList
-      ? wordList.slice(currentChapter * CHAPTER_LENGTH, (currentChapter + 1) * CHAPTER_LENGTH)
-      : []
+    let newWords: Word[]
+    if (isFirstChapter) {
+      newWords = firstChapter
+    } else if (isReviewMode) {
+      newWords = reviewRecord?.words ?? []
+    } else if (wordList) {
+      newWords = wordList.slice(currentChapter * CHAPTER_LENGTH, (currentChapter + 1) * CHAPTER_LENGTH)
+    } else {
+      newWords = []
+    }
 
-    // 记录原始 index
-    return newWords.map((word, index) => ({ ...word, index }))
-  }, [isFirstChapter, wordList, currentChapter])
+    // 记录原始 index, 并对 word.trans 做兜底处理
+    return newWords.map((word, index) => {
+      let trans: string[]
+      if (Array.isArray(word.trans)) {
+        trans = word.trans.filter((item) => typeof item === 'string')
+      } else if (word.trans === null || word.trans === undefined || typeof word.trans === 'object') {
+        trans = []
+      } else {
+        trans = [String(word.trans)]
+      }
+      return {
+        ...word,
+        index,
+        trans,
+      }
+    })
+  }, [isFirstChapter, isReviewMode, wordList, reviewRecord?.words, currentChapter])
 
-  return { words: wordList === undefined ? undefined : words, isLoading, error }
-}
-
-async function wordListFetcher(url: string): Promise<Word[]> {
-  const URL_PREFIX: string = REACT_APP_DEPLOY_ENV === 'pages' ? '/qwerty-learner' : ''
-
-  const response = await fetch(URL_PREFIX + url)
-  const words: Word[] = await response.json()
-  return words
+  return { words, isLoading, error }
 }
 
 const firstChapter = [

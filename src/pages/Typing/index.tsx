@@ -1,4 +1,5 @@
 import Layout from '../../components/Layout'
+import { DictChapterButton } from './components/DictChapterButton'
 import PronunciationSwitcher from './components/PronunciationSwitcher'
 import ResultScreen from './components/ResultScreen'
 import Speed from './components/Speed'
@@ -9,18 +10,18 @@ import WordPanel from './components/WordPanel'
 import { useConfetti } from './hooks/useConfetti'
 import { useWordList } from './hooks/useWordList'
 import { TypingContext, TypingStateActionType, initialState, typingReducer } from './store'
+import { DonateCard } from '@/components/DonateCard'
 import Header from '@/components/Header'
 import StarCard from '@/components/StarCard'
 import Tooltip from '@/components/Tooltip'
 import { idDictionaryMap } from '@/resources/dictionary'
-import { currentChapterAtom, currentDictIdAtom, currentDictInfoAtom, randomConfigAtom } from '@/store'
+import { currentChapterAtom, currentDictIdAtom, isReviewModeAtom, randomConfigAtom, reviewModeInfoAtom } from '@/store'
 import { IsDesktop, isLegal } from '@/utils'
 import { useSaveChapterRecord } from '@/utils/db'
 import { useMixPanelChapterLogUploader } from '@/utils/mixpanel'
-import { useAtom, useAtomValue } from 'jotai'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import type React from 'react'
 import { useCallback, useEffect, useState } from 'react'
-import { NavLink } from 'react-router-dom'
 import { useImmerReducer } from 'use-immer'
 
 const App: React.FC = () => {
@@ -28,13 +29,14 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const { words } = useWordList()
 
-  const currentChapter = useAtomValue(currentChapterAtom)
   const [currentDictId, setCurrentDictId] = useAtom(currentDictIdAtom)
-  const currentDictInfo = useAtomValue(currentDictInfoAtom)
+  const setCurrentChapter = useSetAtom(currentChapterAtom)
   const randomConfig = useAtomValue(randomConfigAtom)
-
   const chapterLogUploader = useMixPanelChapterLogUploader(state)
   const saveChapterRecord = useSaveChapterRecord()
+
+  const reviewModeInfo = useAtomValue(reviewModeInfoAtom)
+  const isReviewMode = useAtomValue(isReviewModeAtom)
 
   useEffect(() => {
     // 检测用户设备
@@ -52,8 +54,10 @@ const App: React.FC = () => {
     const id = currentDictId
     if (!(id in idDictionaryMap)) {
       setCurrentDictId('cet4')
+      setCurrentChapter(0)
+      return
     }
-  }, [currentDictId, setCurrentDictId])
+  }, [currentDictId, setCurrentChapter, setCurrentDictId])
 
   const skipWord = useCallback(() => {
     dispatch({ type: TypingStateActionType.SKIP_WORD })
@@ -90,9 +94,11 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (words !== undefined) {
+      const initialIndex = isReviewMode && reviewModeInfo.reviewRecord?.index ? reviewModeInfo.reviewRecord.index : 0
+
       dispatch({
         type: TypingStateActionType.SETUP_CHAPTER,
-        payload: { words, shouldShuffle: randomConfig.isOpen },
+        payload: { words, shouldShuffle: randomConfig.isOpen, initialIndex },
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -124,17 +130,11 @@ const App: React.FC = () => {
   return (
     <TypingContext.Provider value={{ state: state, dispatch }}>
       <StarCard />
+      {state.isFinished && <DonateCard />}
       {state.isFinished && <ResultScreen />}
       <Layout>
         <Header>
-          <Tooltip content="词典章节切换">
-            <NavLink
-              className="block rounded-lg px-3 py-1 text-lg transition-colors duration-300 ease-in-out hover:bg-indigo-400 hover:text-white focus:outline-none dark:text-white dark:text-opacity-60 dark:hover:text-opacity-100"
-              to="/gallery"
-            >
-              {currentDictInfo.name} 第 {currentChapter + 1} 章
-            </NavLink>
-          </Tooltip>
+          <DictChapterButton />
           <PronunciationSwitcher />
           <Switcher />
           <StartButton isLoading={isLoading} />
@@ -142,14 +142,14 @@ const App: React.FC = () => {
             <button
               className={`${
                 state.isShowSkip ? 'bg-orange-400' : 'invisible w-0 bg-gray-300 px-0 opacity-0'
-              } btn-primary transition-all duration-300 `}
+              } my-btn-primary transition-all duration-300 `}
               onClick={skipWord}
             >
               Skip
             </button>
           </Tooltip>
         </Header>
-        <div className="container mx-auto flex h-full flex-1 flex-col items-center justify-center pb-20">
+        <div className="container mx-auto flex h-full flex-1 flex-col items-center justify-center pb-5">
           <div className="container relative mx-auto flex h-full flex-col items-center">
             <div className="container flex flex-grow items-center justify-center">
               {isLoading ? (

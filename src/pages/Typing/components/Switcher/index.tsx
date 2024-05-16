@@ -1,4 +1,6 @@
 import { TypingContext, TypingStateActionType } from '../../store'
+import AnalysisButton from '../AnalysisButton'
+import ErrorBookButton from '../ErrorBookButton'
 import HandPositionIllustration from '../HandPositionIllustration'
 import LoopWordSwitcher from '../LoopWordSwitcher'
 import Setting from '../Setting'
@@ -6,6 +8,7 @@ import SoundSwitcher from '../SoundSwitcher'
 import WordDictationSwitcher from '../WordDictationSwitcher'
 import Tooltip from '@/components/Tooltip'
 import { isOpenDarkModeAtom } from '@/store'
+import { CTRL } from '@/utils'
 import { useAtom } from 'jotai'
 import { useContext } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
@@ -29,14 +32,6 @@ export default function Switcher() {
   }
 
   useHotkeys(
-    'ctrl+d',
-    () => {
-      changeDarkModeState()
-    },
-    { enableOnFormTags: true, preventDefault: true },
-    [],
-  )
-  useHotkeys(
     'ctrl+shift+v',
     () => {
       changeTransVisibleState()
@@ -54,10 +49,10 @@ export default function Switcher() {
         <LoopWordSwitcher />
       </Tooltip>
 
-      <Tooltip className="h-7 w-7" content={'开关默写模式（Ctrl + V）'}>
+      <Tooltip className="h-7 w-7" content={`开关默写模式（${CTRL} + V）`}>
         <WordDictationSwitcher />
       </Tooltip>
-      <Tooltip className="h-7 w-7" content="开关释义显示（Ctrl + Shift + V）">
+      <Tooltip className="h-7 w-7" content={`开关释义显示（${CTRL} + Shift + V）`}>
         <button
           className={`p-[2px] ${state?.isTransVisible ? 'text-indigo-500' : 'text-gray-500'} text-lg focus:outline-none`}
           type="button"
@@ -65,12 +60,21 @@ export default function Switcher() {
             changeTransVisibleState()
             e.currentTarget.blur()
           }}
-          aria-label="开关释义显示（Ctrl + T）"
+          aria-label={`开关释义显示（${CTRL} + Shift + V）`}
         >
           {state?.isTransVisible ? <IconLanguage /> : <IconLanguageOff />}
         </button>
       </Tooltip>
-      <Tooltip className="h-7 w-7" content="开关深色模式（Ctrl + D）">
+
+      <Tooltip content="错题本">
+        <ErrorBookButton />
+      </Tooltip>
+
+      <Tooltip className="h-7 w-7" content="查看数据统计">
+        <AnalysisButton />
+      </Tooltip>
+
+      <Tooltip className="h-7 w-7" content="开关深色模式">
         <button
           className={`p-[2px] text-lg text-indigo-500 focus:outline-none`}
           type="button"
@@ -78,7 +82,7 @@ export default function Switcher() {
             changeDarkModeState()
             e.currentTarget.blur()
           }}
-          aria-label="开关深色模式（Ctrl + D）"
+          aria-label="开关深色模式"
         >
           {isOpenDarkMode ? <IconMoon className="icon" /> : <IconSun className="icon" />}
         </button>
